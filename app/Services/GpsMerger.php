@@ -21,6 +21,12 @@ class GpsMerger {
         $this->gpx = collect();
     }
 
+    /**
+     * @param $tcxFilePath
+     * @param $gpxFilePath
+     * @param $type
+     * @return string
+     */
     public function merge($tcxFilePath, $gpxFilePath, $type) {
         $this->extractData($tcxFilePath, $gpxFilePath);
 
