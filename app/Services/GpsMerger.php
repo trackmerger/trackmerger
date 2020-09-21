@@ -139,7 +139,8 @@ class GpsMerger {
                 $trackPointExtension = $extensions->addChild('TrackPointExtension', null, $ns3_schema);
                 $trackPointExtension->addChild('hr', $entry['hr'] ?? '', $ns3_schema);
                 $trackPointExtension->addChild('cad', $entry['cadence'] ?? '', $ns3_schema);
-                $trackPointExtension->addChild('power', $entry['power'] ?? '', $ns3_schema);
+
+                $extensions->addChild('power', $entry['power'] ?? '');
 
             }
         }
