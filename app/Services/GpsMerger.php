@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use SimpleXMLElement;
 
 class GpsMerger {
@@ -9,94 +11,110 @@ class GpsMerger {
     /**
      * @var \Illuminate\Support\Collection
      */
-    protected $tcx;
+    protected $data;
 
     /**
      * @var \Illuminate\Support\Collection
      */
-    protected $gpx;
+    protected $fileInfos;
 
     public function __construct() {
-        $this->tcx = collect();
-        $this->gpx = collect();
-    }
-
-    /**
-     * @param $tcxFilePath
-     * @param $gpxFilePath
-     * @param $type
-     * @return string
-     */
-    public function merge($tcxFilePath, $gpxFilePath, $type) {
-        $this->extractData($tcxFilePath, $gpxFilePath);
-
-        $tcxKeys = $this->tcx->keys();
-        $gpxKeys = $this->gpx->keys();
-        $keys = $tcxKeys->merge($gpxKeys)->unique()->sort();
-
-        $result = $keys->map(function ($key) {
-            $newItem = [];
-
-            if ($this->tcx->has($key)) {
-                $tcx = $this->tcx->get($key);
-                $newItem['time'] = $tcx['time'];
-                $newItem['cadence'] = $tcx['cadence'];
-                $newItem['power'] = $tcx['power'];
-                $newItem['speed'] = $tcx['speed'];
-            }
-
-            if ($this->gpx->has($key)) {
-                $gpx = $this->gpx->get($key);
-                $newItem['time'] = $gpx['time'];
-                $newItem['ele'] = $gpx['ele'];
-                $newItem['lat'] = $gpx['lat'];
-                $newItem['long'] = $gpx['long'];
-                $newItem['hr'] = $gpx['hr'];
-            }
-
-            return $newItem;
-        });
-
-        return $this->generateResultXML($result, $type);
-    }
-
-    /**
-     * @param $tcxFilePath
-     * @param $gpxFilePath
-     */
-    protected function extractData($tcxFilePath, $gpxFilePath) {
-        $tcxXML = simplexml_load_file($tcxFilePath);
-        $gpxXML = simplexml_load_file($gpxFilePath);
-
-        $gpxXML->registerXPathNamespace('gpxtpx', 'http://www.garmin.com/xmlschemas/TrackPointExtension/v1');
-
-        foreach($tcxXML->Activities->Activity->Lap->Track->Trackpoint as $trackpoint) {
-            $this->tcx->put(strtotime($trackpoint->Time), [
-                'time' => (string) $trackpoint->Time,
-                'cadence' => (int) $trackpoint->Cadence,
-                'power' => (int) $trackpoint->Extensions->TPX->Watts,
-                'speed' => (float) $trackpoint->Extensions->TPX->Speed
-            ]);
-        }
-
-        $ns = $gpxXML->getNamespaces(true);
-        foreach($gpxXML->trk->trkseg->trkpt as $trackpoint) {
-            $this->gpx->put(strtotime($trackpoint->time), [
-                'time' => (string) $trackpoint->time,
-                'ele' => (float) $trackpoint->ele,
-                'lat' => (float) $trackpoint['lat'],
-                'long' => (float) $trackpoint['lon'],
-                'hr' => (isset($trackpoint->extensions)) ? (int) $trackpoint->extensions->children($ns['gpxtpx'])->TrackPointExtension->hr : 0
-            ]);
-        }
+        $this->data = collect();
+        $this->fileInfos = collect();
     }
 
     /**
      * @param $entries
-     * @param $type
      * @return string
      */
-    protected function generateResultXML($entries, $type) {
+    public function merge($entries) {
+        $this->data = session('gpsdata');
+        $this->fileInfos = session('fileinfos');
+
+        $keys1 = $this->data[0]->keys();
+        $keys2 = $this->data[1]->keys();
+        $keys = $keys1->merge($keys2)->unique()->sort();
+
+        return $keys->map(function ($timestamp) use ($entries) {
+            $newItem = [];
+
+            foreach($this->data as $index => $data) {
+                if ($data->has($timestamp)) {
+                    $dataItem = $data->get($timestamp);
+                    if (!array_key_exists('time', $newItem)) $newItem['time'] = $dataItem['time'];
+
+                    if (in_array('cadence', $entries[$index])) $newItem['cadence'] = $dataItem['cadence'];
+                    if (in_array('power', $entries[$index])) $newItem['power'] = $dataItem['power'];
+                    if (in_array('speed', $entries[$index])) $newItem['speed'] = $dataItem['speed'];
+                    if (in_array('altitude', $entries[$index])) $newItem['altitude'] = $dataItem['altitude'];
+                    if (in_array('distance', $entries[$index])) $newItem['distance'] = $dataItem['distance'];
+                    if (in_array('lat', $entries[$index])) $newItem['lat'] = $dataItem['lat'];
+                    if (in_array('long', $entries[$index])) $newItem['long'] = $dataItem['long'];
+                    if (in_array('hr', $entries[$index])) $newItem['hr'] = $dataItem['hr'];
+                }
+            }
+
+            return $newItem;
+        });
+    }
+
+    /**
+     * @param array $files
+     * @param int $type
+     * @return Collection
+     */
+    public function extractData($files, $type) {
+        $hiddenFields = ['time', 'ele'];
+
+        foreach($files as $file) {
+            /** @var UploadedFile $file */
+            $xml = simplexml_load_file($file->path());
+
+            if ($file->getClientOriginalExtension() == 'gpx') {
+                $data = $this->extractDataFromGpx($xml);
+                $this->data->push($data);
+
+                $entries = collect(array_keys($data->first()))->filter(function ($value) use ($hiddenFields) {
+                    return !in_array($value, $hiddenFields);
+                });
+
+                $this->fileInfos->push([
+                    'filename' => $file->getClientOriginalName(),
+                    'type' => 'GPX',
+                    'entries' => $entries
+                ]);
+            } elseif ($file->getClientOriginalExtension() == 'tcx') {
+                $data = $this->extractDataFromTcx($xml);
+                $this->data->push($data);
+
+                $entries = collect(array_keys($data->first()))->filter(function ($value) use ($hiddenFields) {
+                    return !in_array($value, $hiddenFields);
+                });
+
+                $this->fileInfos->push([
+                    'filename' => $file->getClientOriginalName(),
+                    'type' => 'TCX',
+                    'entries' => $entries
+                ]);
+            }
+        }
+
+        session([
+            'fileinfos' => $this->fileInfos,
+            'gpsdata' => $this->data,
+            'type' => $type
+        ]);
+
+        return $this->fileInfos;
+    }
+
+    /**
+     * @param $data
+     * @return string
+     */
+    public function generateResultXML($data) {
+        $type = session('type');
+
         $gpx_schema = 'http://www.cluetrust.com/XML/GPXDATA/1/0';
         $ns3_schema = 'http://www.garmin.com/xmlschemas/TrackPointExtension/v1';
 
@@ -118,7 +136,7 @@ class GpsMerger {
 
         $trkseg = $trk->addChild('trkseg');
 
-        foreach ($entries as $entry) {
+        foreach ($data as $entry) {
             $trkpt = $trkseg->addChild('trkpt');
 
             if (isset($entry['long']) && isset($entry['lat'])) {
@@ -126,7 +144,7 @@ class GpsMerger {
                 $trkpt->addAttribute('lat', $entry['lat']);
             }
 
-            $trkpt->addChild('ele', $entry['ele'] ?? '');
+            $trkpt->addChild('ele', $entry['altitude'] ?? '');
             $trkpt->addChild('time', $entry['time'] ?? '');
 
             $extensions = $trkpt->addChild('extensions');
@@ -135,6 +153,7 @@ class GpsMerger {
                 $extensions->addChild('hr', $entry['hr'] ?? '', $gpx_schema);
                 $extensions->addChild('cadence', $entry['cadence'] ?? '', $gpx_schema);
                 $extensions->addChild('power', $entry['power'] ?? '');
+                $extensions->addChild('distance', $entry['distance'] ?? '');
             } elseif ($type == 2) {
                 $trackPointExtension = $extensions->addChild('TrackPointExtension', null, $ns3_schema);
                 $trackPointExtension->addChild('hr', $entry['hr'] ?? '', $ns3_schema);
@@ -145,5 +164,48 @@ class GpsMerger {
         }
 
         return $xml->asXML();
+    }
+
+    /**
+     * @param SimpleXMLElement $xml
+     * @return Collection
+     */
+    protected function extractDataFromGpx(SimpleXMLElement $xml) {
+        $xml->registerXPathNamespace('gpxtpx', 'http://www.garmin.com/xmlschemas/TrackPointExtension/v1');
+
+        $data = collect();
+        $ns = $xml->getNamespaces(true);
+        foreach($xml->trk->trkseg->trkpt as $trackpoint) {
+            $data->put(strtotime($trackpoint->time), [
+                'time' => (string) $trackpoint->time,
+                'altitude' => (float) $trackpoint->ele,
+                'lat' => (float) $trackpoint['lat'],
+                'long' => (float) $trackpoint['lon'],
+                'hr' => (isset($trackpoint->extensions)) ? (int) $trackpoint->extensions->children($ns['gpxtpx'])->TrackPointExtension->hr : 0
+            ]);
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param SimpleXMLElement $xml
+     * @return Collection
+     */
+    protected function extractDataFromTcx(SimpleXMLElement $xml) {
+        $data = collect();
+
+        foreach($xml->Activities->Activity->Lap->Track->Trackpoint as $trackpoint) {
+            $data->put(strtotime($trackpoint->Time), [
+                'time' => (string) $trackpoint->Time,
+                'cadence' => (int) $trackpoint->Cadence,
+                'distance' => (int) $trackpoint->DistanceMeters,
+                'altitude' => (int) $trackpoint->AltitudeMeters,
+                'power' => (int) $trackpoint->Extensions->TPX->Watts,
+//                'speed' => (float) $trackpoint->Extensions->TPX->Speed
+            ]);
+        }
+
+        return $data;
     }
 }

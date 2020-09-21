@@ -7,5 +7,6 @@ services:
     restart: always
     volumes:
     - .:/var/www/html
+    - ./docker/nginx/default.conf:/etc/nginx/sites-enabled/default.conf
     environment:
     - WEBROOT=/var/www/html/public

@@ -14,5 +14,6 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::get('/', [MainContoller::class, 'showForm']);
-Route::post('/', [MainContoller::class, 'process']);
+Route::get('/', [MainContoller::class, 'showForm'])->name('start');
+Route::post('/check', [MainContoller::class, 'check'])->name('check');
+Route::post('/output', [MainContoller::class, 'output'])->name('output');
