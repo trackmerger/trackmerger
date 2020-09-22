@@ -71,10 +71,11 @@ class GpsMerger {
             $xml = simplexml_load_file($file->path());
 
             if ($file->getClientOriginalExtension() == 'gpx') {
-                $data = $this->extractDataFromGpx($xml);
+                $result = $this->extractDataFromGpx($xml);
+                $data = $result['data'];
                 $this->data->push($data);
 
-                $entries = collect(array_keys($data->first()))->filter(function ($value) use ($hiddenFields) {
+                $entries = collect($result['keys'])->filter(function ($value) use ($hiddenFields) {
                     return !in_array($value, $hiddenFields);
                 });
 
@@ -84,10 +85,12 @@ class GpsMerger {
                     'entries' => $entries
                 ]);
             } elseif ($file->getClientOriginalExtension() == 'tcx') {
-                $data = $this->extractDataFromTcx($xml);
+                $result = $this->extractDataFromTcx($xml);
+                $data = $result['data'];
+
                 $this->data->push($data);
 
-                $entries = collect(array_keys($data->first()))->filter(function ($value) use ($hiddenFields) {
+                $entries = collect($result['keys'])->filter(function ($value) use ($hiddenFields) {
                     return !in_array($value, $hiddenFields);
                 });
 
@@ -168,44 +171,80 @@ class GpsMerger {
 
     /**
      * @param SimpleXMLElement $xml
-     * @return Collection
+     * @return array
      */
     protected function extractDataFromGpx(SimpleXMLElement $xml) {
         $xml->registerXPathNamespace('gpxtpx', 'http://www.garmin.com/xmlschemas/TrackPointExtension/v1');
 
         $data = collect();
+        $keys = collect();
         $ns = $xml->getNamespaces(true);
+
         foreach($xml->trk->trkseg->trkpt as $trackpoint) {
-            $data->put(strtotime($trackpoint->time), [
+            $newItem = [
                 'time' => (string) $trackpoint->time,
                 'altitude' => (float) $trackpoint->ele,
                 'lat' => (float) $trackpoint['lat'],
                 'long' => (float) $trackpoint['lon'],
                 'hr' => (isset($trackpoint->extensions)) ? (int) $trackpoint->extensions->children($ns['gpxtpx'])->TrackPointExtension->hr : 0
-            ]);
+            ];
+            $keys = $keys->merge(array_keys($newItem))->unique();
+
+            $data->put(strtotime($trackpoint->time), $newItem);
         }
 
-        return $data;
+        return [
+            'keys' => $keys,
+            'data' => $data
+        ];
     }
 
     /**
      * @param SimpleXMLElement $xml
-     * @return Collection
+     * @return array
      */
     protected function extractDataFromTcx(SimpleXMLElement $xml) {
         $data = collect();
+        $keys = collect();
 
         foreach($xml->Activities->Activity->Lap->Track->Trackpoint as $trackpoint) {
-            $data->put(strtotime($trackpoint->Time), [
-                'time' => (string) $trackpoint->Time,
-                'cadence' => (int) $trackpoint->Cadence,
-                'distance' => (int) $trackpoint->DistanceMeters,
-                'altitude' => (int) $trackpoint->AltitudeMeters,
-                'power' => (int) $trackpoint->Extensions->TPX->Watts,
-//                'speed' => (float) $trackpoint->Extensions->TPX->Speed
-            ]);
+            $newItem = [
+                'time' => (string) $trackpoint->Time
+            ];
+
+            if (isset($trackpoint->Cadence)) {
+                $newItem['cadence'] = (int) $trackpoint->Cadence;
+            }
+
+            if (isset($trackpoint->DistanceMeters)) {
+                $newItem['distance'] = (int) $trackpoint->DistanceMeters;
+            }
+
+            if (isset($trackpoint->AltitudeMeters)) {
+                $newItem['altitude'] = (int) $trackpoint->AltitudeMeters;
+            }
+
+            if (isset($trackpoint->Extensions) && isset($trackpoint->Extensions->TPX) && isset($trackpoint->Extensions->TPX->Watts)) {
+                $newItem['power'] = (int) $trackpoint->Extensions->TPX->Watt;
+            }
+
+            if (isset($trackpoint->HeartRateBpm)) {
+                $newItem['hr'] = (int) $trackpoint->HeartRateBpm->Value;
+            }
+
+            if (isset($trackpoint->Position)) {
+                $newItem['lat'] = (int) $trackpoint->Position->LatitudeDegrees;
+                $newItem['long'] = (int) $trackpoint->Position->LongitudeDegrees;
+            }
+
+            $keys = $keys->merge(array_keys($newItem))->unique();
+
+            $data->put(strtotime($trackpoint->Time), $newItem);
         }
 
-        return $data;
+        return [
+            'keys' => $keys,
+            'data' => $data
+        ];
     }
 }
