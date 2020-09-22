@@ -1,9 +1,12 @@
-version: '2'
+version: ‚2‘
 
 services:
   app:
-    image: gpsmerger/gpsmerger:latest
+    image: richarvey/nginx-php-fpm:1.10.3
     container_name: gps_merger
     restart: always
+    volumes:
+    - .:/var/www/html
+    - ./docker/nginx/default.conf:/etc/nginx/sites-enabled/default.conf
     environment:
     - WEBROOT=/var/www/html/public
