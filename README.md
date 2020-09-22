@@ -32,10 +32,33 @@ You can use the app "Rungap".
 
 ---
 
-## How to run in docker.
+## How to run in docker
+
+1. Pull image from dockerhub and run container
+
+        docker run -d gpsmerger/gpsmerger:latest
+
+2. Open your browser and navigate to http://localhost:80
+
+
+## How to run with docker-compose
+
+1. Download docker-compose.yml.sample from repository
+
+2. Rename "docker-compose.yml.sample" into "docker-compose.yml"
+
+        cp docker-compose.yml.sample docker-compose.yml
+        
+3. Start container with docker-compose
+
+        docker-compose up -d
+
+---
+
+## Run in docker - development
 
 1. Clone repository
-2. Rename "docker-compose.yml.sample" into "docker-compose.yml"
+2. Rename "docker-compose.yml.sample.dev" into "docker-compose.yml"
 3. Change parameters like port if you want (default port is 80)
 
         version: '2'
@@ -56,24 +79,25 @@ You can use the app "Rungap".
 
         mv .env.example .env
 
-5. Change .env parameters to following if you use it in production:
+5. Start container with docker-compose
+
+        docker-compose up -d
+
+6. Enter container and run following 2 commands for setup
+
+        docker exec -it gps_merger bash
+            composer install
+            php artisan key:generate
+
+
+7. Open your browser and navigate to http://localhost:80
+
+ :exclamation: Change .env parameters to following if you use it in production:
 
         APP_ENV=production
         APP_DEBUG=false
         APP_URL=http://localhost (fill in your needs)
 
-6. Start container with docker-compose
-
-        docker-compose up -d
-
-7. Enter container and run following 2 commands for setup
-
-        docker exec -it gps_merger bash
-        composer install
-        php artisan key:generate
-
-
-8. Open your browser and navigate to http://localhost:80
 
 ---
 
@@ -97,9 +121,3 @@ You can use the app "Rungap".
           environment:
              - WEBROOT=/var/www/html/public
 
----
-
-## How to run with prebuild image
-
-    docker pull <...>
-    docker run -d <...>
