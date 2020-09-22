@@ -70,6 +70,7 @@ You can use the app "Rungap".
                restart: always
                volumes:
                   - .:/var/www/html
+                  - ./docker/nginx/default.conf:/etc/nginx/sites-enabled/default.conf
                ports:
                   - 127.0.0.1:8787:80
                environment:
