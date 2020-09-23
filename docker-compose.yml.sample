@@ -2,8 +2,8 @@ version: '2'
 
 services:
   app:
-    image: gpsmerger/gpsmerger:latest
-    container_name: gps_merger
+    image: trackmerger/trackmerger:latest
+    container_name: trackmerger
     restart: always
     environment:
     - WEBROOT=/var/www/html/public

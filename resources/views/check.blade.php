@@ -12,9 +12,9 @@
                 <table class="table table-condensed">
                     <thead>
                         <tr>
-                            <th>Dateiname</th>
-                            <th>Typ</th>
-                            <th>Felder</th>
+                            <th>File</th>
+                            <th>Type</th>
+                            <th>Streams</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -37,7 +37,7 @@
                 </table>
 
                 <br/>
-                <button type="submit" class="btn btn-primary">Mergen</button>
+                <button type="submit" class="btn btn-primary">Merge</button>
             </form>
         </div>
     </div>

@@ -1,8 +1,8 @@
-# GPX File Merger
+# Trackmerger
 
-This tool merges GPX files from Apple Watch and TCX files from Bosch E-Bike Connect (Kiox) into one file to upload to Strava, Garmin etc.
+This tool merges TCX or GPX files from Apple Watch and TCX files from Bosch E-Bike Connect into one file to upload to Strava, Garmin etc.
 
-This tool uses the power and cadence from TCX and add it to gpx tracked with your watch.
+You can choose which values of each file should be merged.
 
 ---
 
@@ -19,10 +19,10 @@ This tool uses the power and cadence from TCX and add it to gpx tracked with you
 ![bosch](images/bosch.jpeg)
 
 
-#### Apple Watch (export gpx file from your training)
+#### Apple Watch (export gpx or tcx file from your training)
 
 1. You need a app installed on your iphone which makes it possible to export a apple watch training as GPX.
-You can use the app "Rungap".
+(You can use the app "Rungap" or any other wich can export your trainings to do that.)
 2. Export your training and save the file.
 
 #### Merge both files
@@ -36,7 +36,7 @@ You can use the app "Rungap".
 
 1. Pull image from dockerhub and run container
 
-        docker run -d gpsmerger/gpsmerger:latest
+        docker run -d trackmerger/trackmerger:latest
 
 2. Open your browser and navigate to http://localhost:80
 
@@ -86,7 +86,7 @@ You can use the app "Rungap".
 
 6. Enter container and run following 2 commands for setup
 
-        docker exec -it gps_merger bash
+        docker exec -it trackmerger bash
             composer install
             php artisan key:generate
 
@@ -104,11 +104,11 @@ You can use the app "Rungap".
 
 ## How to build docker image
 
-    docker build -t yourname/gpsmerger:1 .
+    docker build -t yourname/trackmerger:1 .
 
 ### Run your image
 
-    docker run -d yourname/gpsmerger:1
+    docker run -d yourname/trackmerger:1
 
 ### Run your image with docker-compose
 
@@ -116,8 +116,8 @@ You can use the app "Rungap".
 
     services:
        app:
-          image: yourname/gpsmerger:1
-          container_name: gps_merger
+          image: yourname/trackmerger:1
+          container_name: trackmerger
           restart: always
           environment:
              - WEBROOT=/var/www/html/public
