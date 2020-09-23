@@ -3,7 +3,7 @@
 @section('content')
     <div class="panel panel-primary">
         <div class="panel-heading">
-            <h3 class="panel-title">Bitte Daten zum mergen auswählen</h3>
+            <h3 class="panel-title">Choose files for mergev</h3>
         </div>
         <div class="panel-body">
             <form action="{{ route('output') }}" method="post" enctype="multipart/form-data">

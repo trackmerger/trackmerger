@@ -1,3 +1,4 @@
+![trackmerger-build](https://github.com/trackmerger/trackmerger/workflows/trackmerger-build/badge.svg?branch=master)
 # Trackmerger
 
 This tool merges TCX or GPX files from Apple Watch and TCX files from Bosch E-Bike Connect into one file to upload to Strava, Garmin etc.
@@ -21,7 +22,7 @@ You can choose which values of each file should be merged.
 
 #### Apple Watch (export gpx or tcx file from your training)
 
-1. You need a app installed on your iphone which makes it possible to export a apple watch training as GPX.
+1. You need a app installed on your iphone which makes it possible to export a apple watch training as GPX or TCX.
 (You can use the app "Rungap" or any other wich can export your trainings to do that.)
 2. Export your training and save the file.
 
