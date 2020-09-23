@@ -13,7 +13,7 @@
         <div class="row">
             <div class="col-lg-6 col-lg-offset-3">
                 <div class="page-header">
-                    <h1>GPS Datei Merger</h1>
+                    <h1>Track-Merger</h1>
 
                     @yield('content')
                 </div>

@@ -14,24 +14,24 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Ausgabe</label>
+                    <label>Download</label>
 
                     <div class="radio">
                         <label>
                             <input type="radio" name="type" id="type1" value="1" checked>
-                            Für Strava
+                            Strava
                         </label>
                     </div>
                     <div class="radio">
                         <label>
                             <input type="radio" name="type" id="type2" value="2">
-                            Für Garmin
+                            Garmin
                         </label>
                     </div>
                 </div>
 
                 <br/>
-                <button type="submit" class="btn btn-primary">Hochladen</button>
+                <button type="submit" class="btn btn-primary">Upload</button>
             </form>
         </div>
     </div>

@@ -1,9 +1,9 @@
 FROM richarvey/nginx-php-fpm:1.10.3
-
-LABEL maintainer="GPS-Merger"
+LABEL maintainer="Trackmerger"
 COPY . /var/www/html
 WORKDIR /var/www/html
-RUN mv .env.example .env && \
+RUN mv ./docker/nginx/default.conf /etc/nginx/sites-enabled/default.conf && \
+    mv .env.example .env && \
     composer install && \
     php artisan key:generate
 

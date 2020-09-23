@@ -1,0 +1,12 @@
+version: '2'
+
+services:
+  app:
+    image: richarvey/nginx-php-fpm:1.10.3
+    container_name: trackmerger
+    restart: always
+    volumes:
+    - .:/var/www/html
+    - ./docker/nginx/default.conf:/etc/nginx/sites-enabled/default.conf
+    environment:
+    - WEBROOT=/var/www/html/public

@@ -1,8 +1,8 @@
-# GPX File Merger
+# Trackmerger
 
-This tool merges GPX files from Apple Watch and TCX files from Bosch E-Bike Connect (Kiox) into one file to upload to Strava, Garmin etc.
+This tool merges TCX or GPX files from Apple Watch and TCX files from Bosch E-Bike Connect into one file to upload to Strava, Garmin etc.
 
-This tool uses the power and cadence from TCX and add it to gpx tracked with your watch.
+You can choose which values of each file should be merged.
 
 ---
 
@@ -19,10 +19,10 @@ This tool uses the power and cadence from TCX and add it to gpx tracked with you
 ![bosch](images/bosch.jpeg)
 
 
-#### Apple Watch (export gpx file from your training)
+#### Apple Watch (export gpx or tcx file from your training)
 
 1. You need a app installed on your iphone which makes it possible to export a apple watch training as GPX.
-You can use the app "Rungap".
+(You can use the app "Rungap" or any other wich can export your trainings to do that.)
 2. Export your training and save the file.
 
 #### Merge both files
@@ -32,10 +32,33 @@ You can use the app "Rungap".
 
 ---
 
-## How to run in docker.
+## How to run in docker
+
+1. Pull image from dockerhub and run container
+
+        docker run -d trackmerger/trackmerger:latest
+
+2. Open your browser and navigate to http://localhost:80
+
+
+## How to run with docker-compose
+
+1. Download docker-compose.yml.sample from repository
+
+2. Rename "docker-compose.yml.sample" into "docker-compose.yml"
+
+        cp docker-compose.yml.sample docker-compose.yml
+        
+3. Start container with docker-compose
+
+        docker-compose up -d
+
+---
+
+## Run in docker - development
 
 1. Clone repository
-2. Rename "docker-compose.yml.sample" into "docker-compose.yml"
+2. Rename "docker-compose.yml.sample.dev" into "docker-compose.yml"
 3. Change parameters like port if you want (default port is 80)
 
         version: '2'
@@ -47,6 +70,7 @@ You can use the app "Rungap".
                restart: always
                volumes:
                   - .:/var/www/html
+                  - ./docker/nginx/default.conf:/etc/nginx/sites-enabled/default.conf
                ports:
                   - 127.0.0.1:8787:80
                environment:
@@ -56,34 +80,35 @@ You can use the app "Rungap".
 
         mv .env.example .env
 
-5. Change .env parameters to following if you use it in production:
+5. Start container with docker-compose
+
+        docker-compose up -d
+
+6. Enter container and run following 2 commands for setup
+
+        docker exec -it trackmerger bash
+            composer install
+            php artisan key:generate
+
+
+7. Open your browser and navigate to http://localhost:80
+
+ :exclamation: Change .env parameters to following if you use it in production:
 
         APP_ENV=production
         APP_DEBUG=false
         APP_URL=http://localhost (fill in your needs)
 
-6. Start container with docker-compose
-
-        docker-compose up -d
-
-7. Enter container and run following 2 commands for setup
-
-        docker exec -it gps_merger bash
-        composer install
-        php artisan key:generate
-
-
-8. Open your browser and navigate to http://localhost:80
 
 ---
 
 ## How to build docker image
 
-    docker build -t yourname/gpsmerger:1 .
+    docker build -t yourname/trackmerger:1 .
 
 ### Run your image
 
-    docker run -d yourname/gpsmerger:1
+    docker run -d yourname/trackmerger:1
 
 ### Run your image with docker-compose
 
@@ -91,15 +116,9 @@ You can use the app "Rungap".
 
     services:
        app:
-          image: yourname/gpsmerger:1
-          container_name: gps_merger
+          image: yourname/trackmerger:1
+          container_name: trackmerger
           restart: always
           environment:
              - WEBROOT=/var/www/html/public
 
----
-
-## How to run with prebuild image
-
-    docker pull <...>
-    docker run -d <...>
