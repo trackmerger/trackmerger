@@ -14,7 +14,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Download</label>
+                    <label>Output</label>
 
                     <div class="radio">
                         <label>

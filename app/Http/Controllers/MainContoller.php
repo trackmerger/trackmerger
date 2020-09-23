@@ -17,7 +17,7 @@ class MainContoller extends Controller
      */
     public function check(Request $request) {
         if (!$request->hasFile('files')) {
-            dd('Dateien fehlen');
+            dd('no files - choose your files and press upload-button');
         }
 
         $merger = new GpsMerger();
