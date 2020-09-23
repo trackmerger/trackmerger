@@ -217,11 +217,11 @@ class GpsMerger {
             }
 
             if (isset($trackpoint->DistanceMeters)) {
-                $newItem['distance'] = (int) $trackpoint->DistanceMeters;
+                $newItem['distance'] = (float) $trackpoint->DistanceMeters;
             }
 
             if (isset($trackpoint->AltitudeMeters)) {
-                $newItem['altitude'] = (int) $trackpoint->AltitudeMeters;
+                $newItem['altitude'] = (float) $trackpoint->AltitudeMeters;
             }
 
             if (isset($trackpoint->Extensions) && isset($trackpoint->Extensions->TPX) && isset($trackpoint->Extensions->TPX->Watts)) {
@@ -233,8 +233,8 @@ class GpsMerger {
             }
 
             if (isset($trackpoint->Position)) {
-                $newItem['lat'] = (int) $trackpoint->Position->LatitudeDegrees;
-                $newItem['long'] = (int) $trackpoint->Position->LongitudeDegrees;
+                $newItem['lat'] = (float) $trackpoint->Position->LatitudeDegrees;
+                $newItem['long'] = (float) $trackpoint->Position->LongitudeDegrees;
             }
 
             $keys = $keys->merge(array_keys($newItem))->unique();
