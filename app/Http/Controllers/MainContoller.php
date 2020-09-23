@@ -32,11 +32,16 @@ class MainContoller extends Controller
      */
     public function output(Request $request) {
         $merger = new GpsMerger();
-        $data = $merger->merge($request->get('entries'));
-        $xml = $merger->generateResultXML($data);
+        $xml = $merger->merge($request->get('entries'));
+
+        if ($merger->fileInfos[0] == 'GPX' || $merger->fileInfos[1] == 'GPX') {
+            $filename = 'merged.gpx';
+        } else {
+            $filename = 'merged.tcx';
+        }
 
         return response()->streamDownload(function () use ($xml) {
             echo $xml;
-        }, 'merged.gpx', ['Content-Type' => 'text/xml']);
+        }, $filename, ['Content-Type' => 'text/xml']);
     }
 }

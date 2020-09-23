@@ -16,7 +16,7 @@ class GpsMerger {
     /**
      * @var \Illuminate\Support\Collection
      */
-    protected $fileInfos;
+    public $fileInfos;
 
     public function __construct() {
         $this->data = collect();
@@ -35,7 +35,7 @@ class GpsMerger {
         $keys2 = $this->data[1]->keys();
         $keys = $keys1->merge($keys2)->unique()->sort();
 
-        return $keys->map(function ($timestamp) use ($entries) {
+        $data =  $keys->map(function ($timestamp) use ($entries) {
             $newItem = [];
 
             foreach($this->data as $index => $data) {
@@ -56,6 +56,12 @@ class GpsMerger {
 
             return $newItem;
         });
+
+        if ($this->fileInfos[0] == 'GPX' || $this->fileInfos[1] == 'GPX') {
+            return $this->generateResultXMLAsGPX($data);
+        } else {
+            return $this->generateResultXMLAsTCX($data);
+        }
     }
 
     /**
@@ -112,10 +118,70 @@ class GpsMerger {
     }
 
     /**
+     * @param Collection $data
+     * @return string
+     */
+    public function generateResultXMLAsTCX($data) {
+        $ns3_schema = 'http://www.garmin.com/xmlschemas/TrackPointExtension/v1';
+
+        $xml = new SimpleXMLElement('<?xml version="1.0" encoding="UTF-8"?>
+            <TrainingCenterDatabase
+            xsi:schemaLocation="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2 http://www.garmin.com/xmlschemas/TrainingCenterDatabasev2.xsd"
+            xmlns:ns5="http://www.garmin.com/xmlschemas/ActivityGoals/v1"
+            xmlns:ns3="'.$ns3_schema.'"
+            xmlns:ns2="http://www.garmin.com/xmlschemas/UserProfile/v2"
+            xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ns4="http://www.garmin.com/xmlschemas/ProfileExtension/v1"></TrainingCenterDatabase>');
+
+        $activities = $xml->addChild('Activities');
+        $activity = $activities->addChild('Activity');
+        $activity->addAttribute('Sport', 'E-BikeRide'); // @todo hardcoded!
+        $activity->addChild('Id', date('c')); // @todo timezone?
+        $activity->addChild('Notes', 'TrackMerger Export');
+
+        $lap = $activity->addChild('Lap');
+        $lap->addAttribute('StartTime', $data->first()['time']);
+        $lap->addChild('TotalTimeSeconds', $data->count());
+        $lap->addChild('Calories', 0); // @todo hardcoded!
+        $lap->addChild('TriggerMethod', 'Manual'); // @todo hardcoded!
+
+        $track = $lap->addChild('Track');
+
+        foreach ($data as $entry) {
+            $trackPoint = $track->addChild('Trackpoint');
+            $trackPoint->addChild('Time', $entry['time'] ?? '');
+
+            if (isset($entry['long']) && isset($entry['lat'])) {
+                $position = $trackPoint->addChild('Position');
+                $position->addChild('LongitudeDegrees', $entry['long']);
+                $position->addChild('LatitudeDegrees', $entry['lat']);
+            }
+
+            $trackPoint->addChild('AltitudeMeters', $entry['altitude'] ?? '');
+            if (!empty($entry['hr'])) {
+                $heartRateBpm = $trackPoint->addChild('HeartRateBpm');
+                $heartRateBpm->addChild('Value', $entry['hr']);
+            }
+
+            if (!empty($entry['cadence'])) {
+                $trackPoint->addChild('Cadence', $entry['cadence']);
+            }
+
+            if (!empty($entry['power'])) {
+                $extensions = $trackPoint->addChild('Extensions');
+                $tpx = $extensions->addChild('TPX', null, $ns3_schema);
+                $tpx->addChild('Watts', $entry['power'], $ns3_schema);
+            }
+        }
+
+        return $xml->asXML();
+    }
+
+    /**
      * @param $data
      * @return string
      */
-    public function generateResultXML($data) {
+    public function generateResultXMLAsGPX($data) {
         $type = session('type');
 
         $gpx_schema = 'http://www.cluetrust.com/XML/GPXDATA/1/0';
