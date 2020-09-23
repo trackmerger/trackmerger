@@ -43,14 +43,14 @@ class GpsMerger {
                     $dataItem = $data->get($timestamp);
                     if (!array_key_exists('time', $newItem)) $newItem['time'] = $dataItem['time'];
 
-                    if (in_array('cadence', $entries[$index])) $newItem['cadence'] = $dataItem['cadence'];
-                    if (in_array('power', $entries[$index])) $newItem['power'] = $dataItem['power'];
-                    if (in_array('speed', $entries[$index])) $newItem['speed'] = $dataItem['speed'];
-                    if (in_array('altitude', $entries[$index])) $newItem['altitude'] = $dataItem['altitude'];
-                    if (in_array('distance', $entries[$index])) $newItem['distance'] = $dataItem['distance'];
-                    if (in_array('lat', $entries[$index])) $newItem['lat'] = $dataItem['lat'];
-                    if (in_array('long', $entries[$index])) $newItem['long'] = $dataItem['long'];
-                    if (in_array('hr', $entries[$index])) $newItem['hr'] = $dataItem['hr'];
+                    if (in_array('cadence', $entries[$index])) $newItem['cadence'] = $dataItem['cadence'] ?? null;
+                    if (in_array('power', $entries[$index])) $newItem['power'] = $dataItem['power'] ?? null;
+                    if (in_array('speed', $entries[$index])) $newItem['speed'] = $dataItem['speed'] ?? null;
+                    if (in_array('altitude', $entries[$index])) $newItem['altitude'] = $dataItem['altitude'] ?? null;
+                    if (in_array('distance', $entries[$index])) $newItem['distance'] = $dataItem['distance'] ?? null;
+                    if (in_array('lat', $entries[$index])) $newItem['lat'] = $dataItem['lat'] ?? null;
+                    if (in_array('long', $entries[$index])) $newItem['long'] = $dataItem['long'] ?? null;
+                    if (in_array('hr', $entries[$index])) $newItem['hr'] = $dataItem['hr'] ?? null;
                 }
             }
 
@@ -163,7 +163,6 @@ class GpsMerger {
                 $trackPointExtension->addChild('cad', $entry['cadence'] ?? '', $ns3_schema);
 
                 $extensions->addChild('power', $entry['power'] ?? '');
-
             }
         }
 
