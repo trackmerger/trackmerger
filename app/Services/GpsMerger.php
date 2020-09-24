@@ -137,7 +137,7 @@ class GpsMerger {
         $activities = $xml->addChild('Activities');
         $activity = $activities->addChild('Activity');
         $activity->addAttribute('Sport', 'E-BikeRide'); // @todo hardcoded!
-        $activity->addChild('Id', date('c')); // @todo timezone?
+        $activity->addChild('Id', gmdate('Y-m-d').'T'.gmdate('H:i:s').'Z');
         $activity->addChild('Notes', 'TrackMerger Export');
 
         $lap = $activity->addChild('Lap');
