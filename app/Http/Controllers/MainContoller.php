@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use DOMDocument;
 use Illuminate\Http\Request;
 use App\Services\GpsMerger;
 
@@ -33,6 +34,14 @@ class MainContoller extends Controller
     public function output(Request $request) {
         $merger = new GpsMerger();
         $xml = $merger->merge($request->get('entries'));
+
+
+        $dom = new DOMDocument();
+        $dom->preserveWhiteSpace = false;
+        $dom->formatOutput = true;
+        $dom->loadXML($xml);
+        $xml = $dom->saveXML();
+
 
         if ($merger->fileInfos[0] == 'GPX' || $merger->fileInfos[1] == 'GPX') {
             $filename = 'merged.gpx';
