@@ -51,6 +51,7 @@ class GpsMerger {
                     if (in_array('lat', $entries[$index])) $newItem['lat'] = $dataItem['lat'] ?? null;
                     if (in_array('long', $entries[$index])) $newItem['long'] = $dataItem['long'] ?? null;
                     if (in_array('hr', $entries[$index])) $newItem['hr'] = $dataItem['hr'] ?? null;
+                    if (in_array('calories', $entries[$index])) $newItem['calories'] = $dataItem['calories'] ?? null;
                 }
             }
 
@@ -142,7 +143,7 @@ class GpsMerger {
         $lap = $activity->addChild('Lap');
         $lap->addAttribute('StartTime', $data->first()['time']);
         $lap->addChild('TotalTimeSeconds', $data->count());
-        $lap->addChild('Calories', 0); // @todo hardcoded!
+        $lap->addChild('Calories', $data->first()['calories'] ?? null);
         $lap->addChild('TriggerMethod', 'Manual'); // @todo hardcoded!
 
         $track = $lap->addChild('Track');
@@ -277,6 +278,10 @@ class GpsMerger {
             $newItem = [
                 'time' => (string) $trackpoint->Time
             ];
+
+            if (!empty($xml->Activities->Activity->Lap->Calories)) {
+                $newItem['calories'] = (int) $xml->Activities->Activity->Lap->Calories;
+            }
 
             if (isset($trackpoint->Cadence)) {
                 $newItem['cadence'] = (int) $trackpoint->Cadence;
