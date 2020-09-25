@@ -42,6 +42,7 @@ class GpsMerger {
                 if ($data->has($timestamp)) {
                     $dataItem = $data->get($timestamp);
                     if (!array_key_exists('time', $newItem)) $newItem['time'] = $dataItem['time'];
+                    if (!array_key_exists('sport', $newItem)) $newItem['sport'] = $dataItem['sport'] ?? 'Biking';   // @todo fallback oder null?
 
                     if (in_array('cadence', $entries[$index])) $newItem['cadence'] = $dataItem['cadence'] ?? null;
                     if (in_array('power', $entries[$index])) $newItem['power'] = $dataItem['power'] ?? null;
@@ -71,7 +72,7 @@ class GpsMerger {
      * @return Collection
      */
     public function extractData($files, $type) {
-        $hiddenFields = ['time', 'ele'];
+        $hiddenFields = ['time', 'ele', 'sport'];
 
         foreach($files as $file) {
             /** @var UploadedFile $file */
@@ -123,20 +124,17 @@ class GpsMerger {
      * @return string
      */
     public function generateResultXMLAsTCX($data) {
-        $ns3_schema = 'http://www.garmin.com/xmlschemas/TrackPointExtension/v1';
-
         $xml = new SimpleXMLElement('<?xml version="1.0" encoding="UTF-8"?>
             <TrainingCenterDatabase
-            xsi:schemaLocation="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2 http://www.garmin.com/xmlschemas/TrainingCenterDatabasev2.xsd"
-            xmlns:ns5="http://www.garmin.com/xmlschemas/ActivityGoals/v1"
-            xmlns:ns3="'.$ns3_schema.'"
-            xmlns:ns2="http://www.garmin.com/xmlschemas/UserProfile/v2"
-            xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"
-            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ns4="http://www.garmin.com/xmlschemas/ProfileExtension/v1"></TrainingCenterDatabase>');
+                xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"
+                xmlns:ns2="http://www.garmin.com/xmlschemas/ActivityExtension/v2"
+                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                xsi:schemaLocation="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2 http://www.garmin.com/xmlschemas/TrainingCenterDatabasev2.xsd"
+            ></TrainingCenterDatabase>');
 
         $activities = $xml->addChild('Activities');
         $activity = $activities->addChild('Activity');
-        $activity->addAttribute('Sport', 'E-BikeRide'); // @todo hardcoded!
+        $activity->addAttribute('Sport', $data->first()['sport'] ?? null);
         $activity->addChild('Id', gmdate('Y-m-d').'T'.gmdate('H:i:s').'Z');
         $activity->addChild('Notes', 'TrackMerger Export');
 
@@ -152,28 +150,38 @@ class GpsMerger {
             $trackPoint = $track->addChild('Trackpoint');
             $trackPoint->addChild('Time', $entry['time'] ?? '');
 
-            if (isset($entry['long']) && isset($entry['lat'])) {
+            if (!empty($entry['long']) && !empty($entry['lat'])) {
                 $position = $trackPoint->addChild('Position');
                 $position->addChild('LongitudeDegrees', $entry['long']);
                 $position->addChild('LatitudeDegrees', $entry['lat']);
             }
 
             $trackPoint->addChild('AltitudeMeters', $entry['altitude'] ?? '');
-            if (!empty($entry['hr'])) {
+            if (array_key_exists('hr', $entry)) {
                 $heartRateBpm = $trackPoint->addChild('HeartRateBpm');
                 $heartRateBpm->addChild('Value', $entry['hr']);
             }
 
-            if (!empty($entry['cadence'])) {
+            if (array_key_exists('cadence', $entry)) {
                 $trackPoint->addChild('Cadence', $entry['cadence']);
             }
 
-            if (!empty($entry['power'])) {
+            if (array_key_exists('power', $entry) || array_key_exists('speed', $entry)) {
                 $extensions = $trackPoint->addChild('Extensions');
-                $tpx = $extensions->addChild('TPX', null, $ns3_schema);
-                $tpx->addChild('Watts', $entry['power'], $ns3_schema);
+                $tpx = $extensions->addChild('TPX', null);
+                $tpx->addAttribute('xmlns', 'http://www.garmin.com/xmlschemas/ActivityExtension/v2');
+
+                if (array_key_exists('power', $entry)) {
+                    $tpx->addChild('Watts', $entry['power']);
+                }
+
+                if (array_key_exists('speed', $entry)) {
+                    $tpx->addChild('Speed', $entry['speed']);
+                }
             }
         }
+
+//        $this->validateTCXForGamin($xml->asXML());
 
         return $xml->asXML();
     }
@@ -274,48 +282,76 @@ class GpsMerger {
         $data = collect();
         $keys = collect();
 
-        foreach($xml->Activities->Activity->Lap->Track->Trackpoint as $trackpoint) {
-            $newItem = [
-                'time' => (string) $trackpoint->Time
-            ];
+        foreach($xml->Activities->Activity->Lap as $lap) {
+            foreach($lap->Track->Trackpoint as $trackpoint) {
+                $newItem = [
+                    'time' => (string) $trackpoint->Time
+                ];
 
-            if (!empty($xml->Activities->Activity->Lap->Calories)) {
-                $newItem['calories'] = (int) $xml->Activities->Activity->Lap->Calories;
+                if (!empty($xml->Activities->Activity->Lap->Calories)) {
+                    $newItem['calories'] = (int) $xml->Activities->Activity->Lap->Calories;
+                }
+
+                if (!empty($xml->Activities->Activity['Sport'])) {
+                    $newItem['sport'] = (string) $xml->Activities->Activity['Sport'];
+                }
+
+                if (isset($trackpoint->Cadence)) {
+                    $newItem['cadence'] = (int) $trackpoint->Cadence;
+                }
+
+                if (isset($trackpoint->DistanceMeters)) {
+                    $newItem['distance'] = (float) $trackpoint->DistanceMeters;
+                }
+
+                if (isset($trackpoint->AltitudeMeters)) {
+                    $newItem['altitude'] = (float) $trackpoint->AltitudeMeters;
+                }
+
+                if (isset($trackpoint->Extensions) && isset($trackpoint->Extensions->TPX)) {
+                    if (isset($trackpoint->Extensions->TPX->Watts)) {
+                        $newItem['power'] = (int) $trackpoint->Extensions->TPX->Watts;
+                    }
+
+                    if (isset($trackpoint->Extensions->TPX->Speed)) {
+                        $newItem['speed'] = (float) $trackpoint->Extensions->TPX->Speed;
+                    }
+                }
+
+                if (isset($trackpoint->HeartRateBpm)) {
+                    $newItem['hr'] = (int) $trackpoint->HeartRateBpm->Value;
+                }
+
+                if (isset($trackpoint->Position)) {
+                    $newItem['lat'] = (float) $trackpoint->Position->LatitudeDegrees;
+                    $newItem['long'] = (float) $trackpoint->Position->LongitudeDegrees;
+                }
+
+                $keys = $keys->merge(array_keys($newItem))->unique();
+
+                $data->put(strtotime($trackpoint->Time), $newItem);
             }
-
-            if (isset($trackpoint->Cadence)) {
-                $newItem['cadence'] = (int) $trackpoint->Cadence;
-            }
-
-            if (isset($trackpoint->DistanceMeters)) {
-                $newItem['distance'] = (float) $trackpoint->DistanceMeters;
-            }
-
-            if (isset($trackpoint->AltitudeMeters)) {
-                $newItem['altitude'] = (float) $trackpoint->AltitudeMeters;
-            }
-
-            if (isset($trackpoint->Extensions) && isset($trackpoint->Extensions->TPX) && isset($trackpoint->Extensions->TPX->Watts)) {
-                $newItem['power'] = (int) $trackpoint->Extensions->TPX->Watt;
-            }
-
-            if (isset($trackpoint->HeartRateBpm)) {
-                $newItem['hr'] = (int) $trackpoint->HeartRateBpm->Value;
-            }
-
-            if (isset($trackpoint->Position)) {
-                $newItem['lat'] = (float) $trackpoint->Position->LatitudeDegrees;
-                $newItem['long'] = (float) $trackpoint->Position->LongitudeDegrees;
-            }
-
-            $keys = $keys->merge(array_keys($newItem))->unique();
-
-            $data->put(strtotime($trackpoint->Time), $newItem);
         }
 
         return [
             'keys' => $keys,
             'data' => $data
         ];
+    }
+
+    protected function validateTCXForGamin($xml) {
+        $xsd = 'https://www8.garmin.com/xmlschemas/TrainingCenterDatabasev2.xsd';
+        // needed for getting errors
+        libxml_use_internal_errors(true);
+
+        $domDocument= new \DOMDocument();
+        $domDocument->loadXML($xml);
+        if (!$domDocument->schemaValidate($xsd)) {
+            $errors = libxml_get_errors();
+            foreach ($errors as $error) {
+                dump($error);
+            }
+            libxml_clear_errors();
+        }
     }
 }
