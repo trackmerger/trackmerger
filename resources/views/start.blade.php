@@ -13,23 +13,6 @@
                     <input type="file" id="files" name="files[]" accept=".tcx,.gpx" multiple>
                 </div>
 
-                <div class="form-group">
-                    <label>Output</label>
-
-                    <div class="radio">
-                        <label>
-                            <input type="radio" name="type" id="type1" value="1" checked>
-                            Strava
-                        </label>
-                    </div>
-                    <div class="radio">
-                        <label>
-                            <input type="radio" name="type" id="type2" value="2">
-                            Garmin
-                        </label>
-                    </div>
-                </div>
-
                 <br/>
                 <button type="submit" class="btn btn-primary">Upload</button>
             </form>

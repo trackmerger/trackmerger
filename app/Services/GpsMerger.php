@@ -5,13 +5,20 @@ namespace App\Services;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use SimpleXMLElement;
+use Waddle\Activity;
+use Waddle\Lap;
+use Waddle\Parsers\GPXParser;
+use Waddle\Parsers\TCXParser;
+use Waddle\TrackPoint;
 
 class GpsMerger {
+
+    const DATE_FORMAT = 'Y-m-d\TH:i:s\Z';
 
     /**
      * @var \Illuminate\Support\Collection
      */
-    protected $data;
+    protected $activities;
 
     /**
      * @var \Illuminate\Support\Collection
@@ -19,8 +26,67 @@ class GpsMerger {
     public $fileInfos;
 
     public function __construct() {
-        $this->data = collect();
+        $this->activities = collect();
         $this->fileInfos = collect();
+    }
+
+    /**
+    * @param array $files
+    * @return Collection
+    */
+    public function extractData($files) {
+        foreach($files as $file) {
+            $type = null;
+
+            /** @var UploadedFile $file */
+            if ($file->getClientOriginalExtension() == 'gpx') {
+                $parser = new GPXParser();
+                $type = 'GPX';
+            } elseif ($file->getClientOriginalExtension() == 'tcx') {
+                $parser = new TCXParser();
+                $type = 'TCX';
+            }
+
+            $activity = $parser->parse($file->path());
+            $this->activities->push($activity);
+
+            $this->fileInfos->push([
+                'filename' => $file->getClientOriginalName(),
+                'type' => $type,
+                'fields' => $this->getAvailableFields($activity)
+            ]);
+        }
+
+        session([
+            'fileinfos' => $this->fileInfos,
+            'activities' => $this->activities
+        ]);
+
+        return $this->fileInfos;
+    }
+
+    protected function getAvailableFields(Activity $activity) {
+        $availableFields = collect();
+
+        foreach ($activity->getLaps() as $lap) {
+            foreach ($lap->getTrackPoints() as $index => $trackPoint) {
+                $currentAvailableFields = [];
+
+                if (!empty($lap->getTotalCalories())) $currentAvailableFields[] = 'Calories';
+                if (!empty($trackPoint->getPosition())) $currentAvailableFields[] = 'Position';
+                if (!is_null($trackPoint->getAltitude())) $currentAvailableFields[] = 'Altitude';
+                if (!is_null($trackPoint->getDistance())) $currentAvailableFields[] = 'Distance';
+                if (!is_null($trackPoint->getSpeed())) $currentAvailableFields[] = 'Speed';
+                if (!is_null($trackPoint->getWatts())) $currentAvailableFields[] = 'Watts';
+                if (!is_null($trackPoint->getCadence())) $currentAvailableFields[] = 'Cadence';
+                if (!is_null($trackPoint->getHeartRate())) $currentAvailableFields[] = 'HeartRate';
+                if (!is_null($trackPoint->getCalories())) $currentAvailableFields[] = 'Calories';
+
+                $availableFields = $availableFields->merge($currentAvailableFields)->unique();
+            }
+        }
+
+        return $availableFields;
     }
 
     /**
@@ -28,102 +94,72 @@ class GpsMerger {
      * @return string
      */
     public function merge($entries) {
-        $this->data = session('gpsdata');
+        $this->activities = session('activities');
         $this->fileInfos = session('fileinfos');
 
-        $keys1 = $this->data[0]->keys();
-        $keys2 = $this->data[1]->keys();
-        $keys = $keys1->merge($keys2)->unique()->sort();
+        $resultActivity = new Activity();
+        $resultLap = new Lap();
 
-        $data =  $keys->map(function ($timestamp) use ($entries) {
-            $newItem = [];
+        $trackpoints = collect();
+        $this->activities->each(function ($activity, $index) use ($resultLap, $trackpoints, $entries) {
+            /** @var Activity $activity */
+            foreach($activity->getLaps() as $lap) {
+                if (in_array('Calories', $entries[$index])) {
+                    $resultLap->setTotalCalories($resultLap->getTotalCalories() + $lap->getTotalCalories());
+                }
 
-            foreach($this->data as $index => $data) {
-                if ($data->has($timestamp)) {
-                    $dataItem = $data->get($timestamp);
-                    if (!array_key_exists('time', $newItem)) $newItem['time'] = $dataItem['time'];
-                    if (!array_key_exists('sport', $newItem)) $newItem['sport'] = $dataItem['sport'] ?? 'Biking';   // @todo fallback oder null?
+                if (in_array('Distance', $entries[$index])) {
+                    $resultLap->setTotalDistance($resultLap->getTotalDistance() + $lap->getTotalDistance());
+                }
 
-                    if (in_array('cadence', $entries[$index])) $newItem['cadence'] = $dataItem['cadence'] ?? null;
-                    if (in_array('power', $entries[$index])) $newItem['power'] = $dataItem['power'] ?? null;
-                    if (in_array('speed', $entries[$index])) $newItem['speed'] = $dataItem['speed'] ?? null;
-                    if (in_array('altitude', $entries[$index])) $newItem['altitude'] = $dataItem['altitude'] ?? null;
-                    if (in_array('distance', $entries[$index])) $newItem['distance'] = $dataItem['distance'] ?? null;
-                    if (in_array('lat', $entries[$index])) $newItem['lat'] = $dataItem['lat'] ?? null;
-                    if (in_array('long', $entries[$index])) $newItem['long'] = $dataItem['long'] ?? null;
-                    if (in_array('hr', $entries[$index])) $newItem['hr'] = $dataItem['hr'] ?? null;
-                    if (in_array('calories', $entries[$index])) $newItem['calories'] = $dataItem['calories'] ?? null;
+                if (in_array('Speed', $entries[$index])) {
+                    $resultLap->setMaxSpeed(max($resultLap->getMaxSpeed(), $lap->getMaxSpeed()));
+                }
+
+                foreach($lap->getTrackPoints() as $trackPoint) {
+                    // ignore trackpoints without position
+                    if (in_array('Position', $entries[$index]) && $trackPoint->getPosition('lat') == 0 && $trackPoint->getPosition('lon') == 0) {
+                        continue;
+                    }
+
+                    if (!$trackpoints->has($trackPoint->getTime('U'))) {
+                        $currentPoint = new TrackPoint();
+                        $currentPoint->setTime($trackPoint->getTime());
+                    } else {
+                        $currentPoint = $trackpoints->get($trackPoint->getTime('U'));
+                    }
+
+                    foreach($entries[$index] as $field) {
+                        if (!in_array($field, ['Calories'])) {
+                            $currentPoint->{'set'.$field}($trackPoint->{'get'.$field}());
+                        }
+                    }
+
+                    $trackpoints->put($trackPoint->getTime('U'), $currentPoint);
                 }
             }
-
-            return $newItem;
         });
 
+        $trackpoints = $trackpoints->sortKeys();
+        $resultLap->setTrackPoints($trackpoints->toArray());
+        $resultLap->setTotalTime($trackpoints->count());
+        $resultActivity->setType($this->activities->first()->getType());
+        $resultActivity->setStartTime($trackpoints->first()->getTime());
+        $resultActivity->setLaps([$resultLap]);
+
         if ($this->fileInfos[0] == 'GPX' || $this->fileInfos[1] == 'GPX') {
-            return $this->generateResultXMLAsGPX($data);
+            return $this->generateResultXMLAsGPX($resultActivity);
         } else {
-            return $this->generateResultXMLAsTCX($data);
+            return $this->generateResultXMLAsTCX($resultActivity);
         }
     }
 
-    /**
-     * @param array $files
-     * @param int $type
-     * @return Collection
-     */
-    public function extractData($files, $type) {
-        $hiddenFields = ['time', 'ele', 'sport'];
-
-        foreach($files as $file) {
-            /** @var UploadedFile $file */
-            $xml = simplexml_load_file($file->path());
-
-            if ($file->getClientOriginalExtension() == 'gpx') {
-                $result = $this->extractDataFromGpx($xml);
-                $data = $result['data'];
-                $this->data->push($data);
-
-                $entries = collect($result['keys'])->filter(function ($value) use ($hiddenFields) {
-                    return !in_array($value, $hiddenFields);
-                });
-
-                $this->fileInfos->push([
-                    'filename' => $file->getClientOriginalName(),
-                    'type' => 'GPX',
-                    'entries' => $entries
-                ]);
-            } elseif ($file->getClientOriginalExtension() == 'tcx') {
-                $result = $this->extractDataFromTcx($xml);
-                $data = $result['data'];
-
-                $this->data->push($data);
-
-                $entries = collect($result['keys'])->filter(function ($value) use ($hiddenFields) {
-                    return !in_array($value, $hiddenFields);
-                });
-
-                $this->fileInfos->push([
-                    'filename' => $file->getClientOriginalName(),
-                    'type' => 'TCX',
-                    'entries' => $entries
-                ]);
-            }
-        }
-
-        session([
-            'fileinfos' => $this->fileInfos,
-            'gpsdata' => $this->data,
-            'type' => $type
-        ]);
-
-        return $this->fileInfos;
-    }
 
     /**
-     * @param Collection $data
+     * @param Activity $resultActivity
      * @return string
      */
-    public function generateResultXMLAsTCX($data) {
+    public function generateResultXMLAsTCX(Activity $resultActivity) {
         $xml = new SimpleXMLElement('<?xml version="1.0" encoding="UTF-8"?>
             <TrainingCenterDatabase
                 xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"
@@ -132,51 +168,59 @@ class GpsMerger {
                 xsi:schemaLocation="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2 http://www.garmin.com/xmlschemas/TrainingCenterDatabasev2.xsd"
             ></TrainingCenterDatabase>');
 
+        $startTime = $resultActivity->getStartTime(self::DATE_FORMAT);
+
         $activities = $xml->addChild('Activities');
         $activity = $activities->addChild('Activity');
-        $activity->addAttribute('Sport', $data->first()['sport'] ?? null);
-        $activity->addChild('Id', gmdate('Y-m-d').'T'.gmdate('H:i:s').'Z');
+        $activity->addAttribute('Sport', $resultActivity->getType());
+        $activity->addChild('Id', $startTime);
         $activity->addChild('Notes', 'TrackMerger Export');
 
+        /** @var Lap $resultLap */
+        $resultLap = $resultActivity->getLap(0);
+
         $lap = $activity->addChild('Lap');
-        $lap->addAttribute('StartTime', $data->first()['time']);
-        $lap->addChild('TotalTimeSeconds', $data->count());
-        $lap->addChild('Calories', $data->first()['calories'] ?? null);
+        $lap->addAttribute('StartTime', $startTime);
+        $lap->addChild('TotalTimeSeconds', $resultLap->getTotalTime());
+        $lap->addChild('DistanceMeters', $resultLap->getTotalDistance());
+        $lap->addChild('MaximumSpeed', $resultLap->getMaxSpeed());
+        $lap->addChild('Calories', $resultLap->getTotalCalories());
         $lap->addChild('TriggerMethod', 'Manual'); // @todo hardcoded!
 
         $track = $lap->addChild('Track');
 
-        foreach ($data as $entry) {
+        foreach ($resultLap->getTrackPoints() as $resultTrackPoint) {
+            /** @var TrackPoint $resultTrackPoint */
             $trackPoint = $track->addChild('Trackpoint');
-            $trackPoint->addChild('Time', $entry['time'] ?? '');
+            $trackPoint->addChild('Time', $resultTrackPoint->getTime(self::DATE_FORMAT));
 
-            if (!empty($entry['long']) && !empty($entry['lat'])) {
+            if (!empty($resultTrackPoint->getPosition())) {
                 $position = $trackPoint->addChild('Position');
-                $position->addChild('LongitudeDegrees', $entry['long']);
-                $position->addChild('LatitudeDegrees', $entry['lat']);
+                $position->addChild('LongitudeDegrees', $resultTrackPoint->getPosition('lon'));
+                $position->addChild('LatitudeDegrees', $resultTrackPoint->getPosition('lat'));
             }
 
-            $trackPoint->addChild('AltitudeMeters', $entry['altitude'] ?? '');
-            if (array_key_exists('hr', $entry)) {
+            $trackPoint->addChild('AltitudeMeters', $resultTrackPoint->getAltitude());
+            if (!is_null($resultTrackPoint->getHeartRate())) {
                 $heartRateBpm = $trackPoint->addChild('HeartRateBpm');
-                $heartRateBpm->addChild('Value', $entry['hr']);
+                $heartRateBpm->addChild('Value', $resultTrackPoint->getHeartRate());
             }
 
-            if (array_key_exists('cadence', $entry)) {
-                $trackPoint->addChild('Cadence', $entry['cadence']);
+            if (!is_null($resultTrackPoint->getCadence())) {
+                $trackPoint->addChild('Cadence', $resultTrackPoint->getCadence());
             }
 
-            if (array_key_exists('power', $entry) || array_key_exists('speed', $entry)) {
+            if (!is_null($resultTrackPoint->getWatts()) || !is_null($resultTrackPoint->getSpeed())) {
                 $extensions = $trackPoint->addChild('Extensions');
                 $tpx = $extensions->addChild('TPX', null);
                 $tpx->addAttribute('xmlns', 'http://www.garmin.com/xmlschemas/ActivityExtension/v2');
 
-                if (array_key_exists('power', $entry)) {
-                    $tpx->addChild('Watts', $entry['power']);
+                if (!is_null($resultTrackPoint->getWatts())) {
+                    $tpx->addChild('Watts', $resultTrackPoint->getWatts());
                 }
 
-                if (array_key_exists('speed', $entry)) {
-                    $tpx->addChild('Speed', $entry['speed']);
+                if (!is_null($resultTrackPoint->getSpeed())) {
+                    $tpx->addChild('Speed', $resultTrackPoint->getSpeed());
                 }
             }
         }
