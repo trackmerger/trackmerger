@@ -22,7 +22,7 @@ class MainContoller extends Controller
         }
 
         $merger = new GpsMerger();
-        $fileInfos = $merger->extractData($request->file('files'), $request->get('type'));
+        $fileInfos = $merger->extractData($request->file('files'));
 
         return view('check', compact('fileInfos'));
     }
@@ -34,23 +34,29 @@ class MainContoller extends Controller
     public function output(Request $request) {
         $merger = new GpsMerger();
         $xml = $merger->merge($request->get('entries'));
+        $xml = $this->formatXML($xml);
 
-
-        $dom = new DOMDocument();
-        $dom->preserveWhiteSpace = false;
-        $dom->formatOutput = true;
-        $dom->loadXML($xml);
-        $xml = $dom->saveXML();
-
-
+        $outputType = ($request->get('type') == 1) ? 'strava' : 'garmin';
         if ($merger->fileInfos[0] == 'GPX' || $merger->fileInfos[1] == 'GPX') {
-            $filename = 'merged.gpx';
+            $filename = 'merged_'.$outputType.'.gpx';
         } else {
-            $filename = 'merged.tcx';
+            $filename = 'merged_'.$outputType.'.tcx';
         }
 
         return response()->streamDownload(function () use ($xml) {
             echo $xml;
         }, $filename, ['Content-Type' => 'text/xml']);
+    }
+
+    /**
+     * @param string $xml
+     * @return false|string
+     */
+    protected function formatXML($xml) {
+        $dom = new DOMDocument();
+        $dom->preserveWhiteSpace = false;
+        $dom->formatOutput = true;
+        $dom->loadXML($xml);
+        return $dom->saveXML();
     }
 }
